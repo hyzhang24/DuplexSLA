@@ -32,7 +32,7 @@ Recent spoken dialogue models have shifted from turn-based to full-duplex design
 - **Assistant audio channel** — discrete assistant speech tokens in a *TA4* layout (1 text anchor + 4 audio tokens at a 40 ms stride per chunk).
 - **Action channel** — a rate-limited textual stream carrying delayed transcripts, planning text, interaction-control labels, and structured tool calls (≤10 tokens per chunk).
 
-All three channels are decoded jointly by a single backbone, so semantic-driven turn-taking and tool calling happen on the same chunked timeline.
+All three channels are decoded jointly by a single backbone, so semantic-driven turn-taking and tool calling happen on the same chunked timeline. The backbone is initialised from [Step-Audio-2-mini](https://github.com/stepfun-ai/Step-Audio2) (~7B parameters) and adapted via continued pretraining (CPT) and post-training on duplex dialogue, turn-taking, and tool-call data.
 
 <div align="center">
   <img src="assets/architecture.png" alt="DuplexSLA chunk-level architecture" width="92%">
