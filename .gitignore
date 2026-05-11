@@ -1,0 +1,57 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log
+
+# Model weights / large artefacts (will be hosted on Hugging Face)
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.ckpt
+
+# Cache
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
