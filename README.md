@@ -21,7 +21,6 @@
 - [ ] Model checkpoints (Hugging Face)
 - [ ] Inference code
 - [ ] **DuplexSLA-Bench** evaluation code and data
-- [ ] Online demo
 
 ## Introduction
 
