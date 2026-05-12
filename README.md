@@ -5,7 +5,7 @@
 **A Full-Duplex Spoken Language Model with Synchronized Speech, Language, and Action**
 
 <a href="#"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-coming%20soon-b31b1b.svg"></a>
-<a href="https://huggingface.co/0xYoung4ever/DuplexSLA"><img alt="Hugging Face" src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-models-blue.svg"></a>
+<a href="#"><img alt="Hugging Face" src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-coming%20soon-lightgrey.svg"></a>
 <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-MIT-yellow.svg"></a>
 
 </div>
