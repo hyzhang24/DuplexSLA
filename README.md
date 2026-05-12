@@ -17,7 +17,7 @@
 
 ## 📑 Open-source Plan
 
-- [ ] DuplexSLA technical report (arXiv)
+- [x] DuplexSLA [technical report (PDF)](DuplexSLA.pdf) — arXiv version coming soon
 - [ ] Model checkpoints (Hugging Face)
 - [ ] Inference code
 - [ ] **DuplexSLA-Bench** evaluation code and data
