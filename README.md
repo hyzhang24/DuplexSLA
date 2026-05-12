@@ -26,8 +26,6 @@
 
 <div align="center">
   <img src="assets/architecture.png" alt="DuplexSLA chunk-level architecture" width="92%">
-  <br>
-  <em>DuplexSLA chunk-level architecture. Each 160 ms chunk contributes 2 user audio features (80 ms each), one assistant TA4 unit (1 text anchor + 4 audio tokens), and up to 10 action-channel tokens for delayed transcripts, planning text, or tool calls.</em>
 </div>
 
 **DuplexSLA** is a native full-duplex *Speech–Language–Action* foundation model. It unifies listening, speaking, in-conversation planning, and tool calling on a single conversational clock, decoding assistant audio together with a structured action stream on a shared 160 ms chunk timeline.
