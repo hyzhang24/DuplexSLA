@@ -24,6 +24,12 @@
 
 ## Introduction
 
+<div align="center">
+  <img src="assets/architecture.png" alt="DuplexSLA chunk-level architecture" width="92%">
+  <br>
+  <em>DuplexSLA chunk-level architecture. Each 160 ms chunk contributes 2 user audio features (80 ms each), one assistant TA4 unit (1 text anchor + 4 audio tokens), and up to 10 action-channel tokens for delayed transcripts, planning text, or tool calls.</em>
+</div>
+
 **DuplexSLA** is a native full-duplex *Speech–Language–Action* foundation model. It unifies listening, speaking, in-conversation planning, and tool calling on a single conversational clock, decoding assistant audio together with a structured action stream on a shared 160 ms chunk timeline.
 
 Recent spoken dialogue models have shifted from turn-based to full-duplex designs, where the model continuously listens to the user while generating responses. However, existing duplex backbones still lack a native channel for in-conversation planning and tool calling, leaving real-time agentic behaviour either tied to turn boundaries or relegated to an external cascade. DuplexSLA closes that gap with a **dual-stream three-channel formulation**:
@@ -33,12 +39,6 @@ Recent spoken dialogue models have shifted from turn-based to full-duplex design
 - **Action channel** — a rate-limited textual stream carrying delayed transcripts, planning text, interaction-control labels, and structured tool calls (≤10 tokens per chunk).
 
 All three channels are decoded jointly by a single backbone, so semantic-driven turn-taking and tool calling happen on the same chunked timeline. The backbone is initialised from [Step-Audio-2-mini](https://github.com/stepfun-ai/Step-Audio2) (~7B parameters) and adapted via continued pretraining (CPT) and post-training on duplex dialogue, turn-taking, and tool-call data.
-
-<div align="center">
-  <img src="assets/architecture.png" alt="DuplexSLA chunk-level architecture" width="92%">
-  <br>
-  <em>DuplexSLA chunk-level architecture. Each 160 ms chunk contributes 2 user audio features (80 ms each), one assistant TA4 unit (1 text anchor + 4 audio tokens), and up to 10 action-channel tokens for delayed transcripts, planning text, or tool calls.</em>
-</div>
 
 ## Highlights
 
