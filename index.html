@@ -1,0 +1,1156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DuplexSLA · A Full-Duplex Speech–Language–Action Foundation Model</title>
+<link rel="icon" type="image/png" href="figures/stepfun-icon.png" />
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+          mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        },
+        colors: {
+          brand: {
+            50:  '#eef4ff',
+            100: '#dbe7ff',
+            200: '#bcd2ff',
+            300: '#8eb3ff',
+            400: '#5d8bff',
+            500: '#3866f5',
+            600: '#244ee0',
+            700: '#1e3eb7',
+            800: '#1c3590',
+            900: '#1c2f73',
+          },
+          user:   '#0ea5e9',
+          assist: '#7c3aed',
+          action: '#f97316',
+          ink:    '#0b1020',
+        },
+      },
+    },
+  };
+</script>
+<style>
+  html { scroll-behavior: smooth; }
+  body { font-family: 'Inter', sans-serif; color: #0b1020; background: #f7f8fb; }
+  code, pre, .mono { font-family: 'JetBrains Mono', monospace; }
+  .grad-hero { background: radial-gradient(1200px 600px at 20% 10%, rgba(56,102,245,.18), transparent 60%),
+                          radial-gradient(900px 500px at 80% 0%, rgba(124,58,237,.18), transparent 60%),
+                          radial-gradient(900px 500px at 50% 100%, rgba(249,115,22,.10), transparent 60%),
+                          linear-gradient(180deg, #0b1020 0%, #131a36 100%); }
+  .grad-hero {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    min-height: min(820px, calc(100vh - 56px));
+  }
+  .grad-hero > .max-w-7xl {
+    position: relative;
+    z-index: 1;
+    min-height: min(820px, calc(100vh - 56px));
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-top: 3.25rem;
+    padding-bottom: 3.5rem;
+  }
+  .duplex-hero-animation {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: .72;
+  }
+  .duplex-hero-animation::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(700px 440px at 76% 38%, rgba(56,102,245,.14), transparent 70%),
+      linear-gradient(90deg, rgba(11,16,32,.94) 0%, rgba(11,16,32,.78) 44%, rgba(11,16,32,.28) 72%, rgba(11,16,32,.12) 100%),
+      linear-gradient(180deg, rgba(11,16,32,.28) 0%, rgba(11,16,32,.04) 42%, rgba(11,16,32,.8) 100%);
+    pointer-events: none;
+  }
+  #hero-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .grad-section { background: linear-gradient(180deg,#ffffff 0%,#f7f8fb 100%); }
+  .chip { display:inline-flex; align-items:center; gap:.4rem; padding:.25rem .65rem; border-radius:999px; font-size:.78rem; font-weight:500; }
+  .glow { box-shadow: 0 10px 40px -10px rgba(56,102,245,.35), 0 4px 12px -6px rgba(0,0,0,.15); }
+  .ring-soft { box-shadow: 0 1px 0 0 rgba(0,0,0,.04), 0 1px 2px 0 rgba(0,0,0,.04), 0 8px 24px -12px rgba(11,16,32,.10); }
+  .num { font-variant-numeric: tabular-nums; }
+  .kbd { font-family: 'JetBrains Mono', monospace; background:#eef2ff; color:#1e3eb7; padding:.05rem .35rem; border-radius:.3rem; font-size:.78rem; }
+  .pulse-dot { width:.5rem; height:.5rem; border-radius:999px; background:#10b981; box-shadow: 0 0 0 0 rgba(16,185,129,.7); animation: pulse 1.8s infinite; }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(16,185,129,.55); }
+    70% { box-shadow: 0 0 0 10px rgba(16,185,129,0); }
+    100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+  }
+
+  /* ---------- Chunk timeline visualization ---------- */
+  .timeline { position: relative; }
+  .row-label { font-size:.72rem; letter-spacing:.04em; text-transform:uppercase; color:#475569; font-weight:600; }
+  .chunk { border-radius: 8px; padding: 8px 8px 6px; font-size: 11px; }
+  .chunk-user  { background: rgba(14,165,233,.10); border:1px solid rgba(14,165,233,.35); color:#075985; }
+  .chunk-assist{ background: rgba(124,58,237,.10); border:1px solid rgba(124,58,237,.35); color:#4c1d95; }
+  .chunk-act   { background: rgba(249,115,22,.10); border:1px solid rgba(249,115,22,.40); color:#9a3412; }
+  .chunk-empty { background: #f1f5f9; border:1px dashed #cbd5e1; color:#64748b; }
+  .tok { display:inline-block; padding:1px 5px; border-radius:4px; background:white; border:1px solid rgba(0,0,0,.08); margin:1px; font-family:'JetBrains Mono',monospace; font-size:10px; }
+  .tok-T { background:#ede9fe; border-color:#c4b5fd; color:#5b21b6; }
+  .tok-A { background:#ddd6fe; border-color:#a78bfa; color:#4c1d95; }
+  .tok-U { background:#e0f2fe; border-color:#7dd3fc; color:#075985; }
+  .tok-ctrl { background:#fff7ed; border-color:#fdba74; color:#9a3412; font-weight:600; }
+  .tok-plan { background:#fff7ed; border-color:#fdba74; color:#9a3412; }
+  .tok-call { background:#fef3c7; border-color:#fcd34d; color:#92400e; }
+  .tok-silence { background:#f1f5f9; border-color:#cbd5e1; color:#475569; }
+
+  .tl-grid { display:grid; grid-template-columns: 90px repeat(8, 1fr); gap:6px; align-items:stretch; }
+  .tl-grid .row-label { display:flex; align-items:center; }
+  .col-head { display:flex; align-items:center; font-size:.78rem; color:#475569; font-weight:600; letter-spacing:.01em; }
+  .col-tick { font-size:.78rem; color:#475569; font-weight:500; font-variant-numeric: tabular-nums; padding:6px 0 8px; border-bottom:1px solid #e2e8f0; }
+  .col-tick .mono { color:#1e3eb7; font-weight:600; }
+  .col-tick sub { font-size:.7em; }
+
+  .table-clean th, .table-clean td { padding: 10px 14px; }
+  .table-clean thead th { font-weight:600; font-size:.85rem; color:#1e293b; border-bottom:1px solid #e2e8f0; text-align:left; }
+  .table-clean tbody td { border-bottom:1px solid #eef2f7; font-size:.92rem; }
+  .table-clean tbody tr:last-child td { border-bottom: none; }
+  .table-clean .best { color:#1e3eb7; font-weight:700; }
+
+  .nav-link { color:#cbd5e1; }
+  .nav-link:hover { color:white; }
+
+  details > summary { list-style: none; cursor: pointer; }
+  details > summary::-webkit-details-marker { display: none; }
+
+  /* Scroll-spy active link */
+  .nav-link.active { color:white; border-bottom: 1px solid rgba(255,255,255,.6); }
+  .grad-hero h1 { max-width: 820px; }
+  .grad-hero h1 + p { max-width: 760px; }
+  .hero-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+    color: rgba(255,255,255,.72);
+    font-size: .76rem;
+    font-weight: 700;
+    letter-spacing: .16em;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+  .hero-specs {
+    display: grid;
+    grid-template-columns: repeat(3, max-content);
+    width: max-content;
+    max-width: 100%;
+    margin-bottom: 12px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,.07);
+    border-radius: 8px;
+    background: linear-gradient(135deg, rgba(255,255,255,.055), rgba(255,255,255,.018));
+    box-shadow: 0 20px 64px -54px rgba(0,0,0,.9);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  .hero-spec {
+    min-width: 138px;
+    padding: 12px 18px 13px;
+  }
+  .hero-spec + .hero-spec {
+    border-left: 1px solid rgba(255,255,255,.065);
+  }
+  .hero-spec span {
+    display: block;
+    margin-bottom: 5px;
+    color: rgba(255,255,255,.38);
+    font-size: .64rem;
+    font-weight: 700;
+    letter-spacing: .14em;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+  .hero-spec strong {
+    display: block;
+    color: rgba(255,255,255,.88);
+    font-size: .98rem;
+    font-weight: 750;
+    line-height: 1.1;
+  }
+  .hero-collab {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 2rem;
+    color: rgba(255,255,255,.62);
+    font-size: .84rem;
+    font-weight: 500;
+  }
+  .hero-collab::before {
+    content: '';
+    width: 30px;
+    height: 1px;
+    background: linear-gradient(90deg, #8eb3ff, rgba(142,179,255,0));
+  }
+  .hero-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0;
+    max-width: 980px;
+    margin-top: 2.75rem;
+    padding: 18px 0;
+    border-top: 1px solid rgba(255,255,255,.12);
+    border-bottom: 1px solid rgba(255,255,255,.1);
+    background: linear-gradient(90deg, rgba(255,255,255,.035), rgba(255,255,255,.012));
+  }
+  .hero-stat {
+    position: relative;
+    min-height: 96px;
+    padding: 2px 24px 0;
+  }
+  .hero-stat + .hero-stat { border-left: 1px solid rgba(255,255,255,.1); }
+  .hero-stat-label {
+    color: rgba(255,255,255,.52);
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .1em;
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+  .hero-stat-value {
+    margin-top: 12px;
+    color: rgba(255,255,255,.94);
+    font-size: clamp(1.5rem, 2.2vw, 1.95rem);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: 0;
+  }
+  .hero-stat-note {
+    max-width: 190px;
+    margin-top: 12px;
+    color: rgba(255,255,255,.48);
+    font-size: .76rem;
+    line-height: 1.35;
+  }
+
+  @media (max-width: 768px) {
+    .grad-hero > .max-w-7xl { min-height: auto; padding-top: 260px; }
+    .duplex-hero-animation { height: 360px; bottom: auto; opacity: .58; }
+    .duplex-hero-animation::after {
+      background:
+        radial-gradient(360px 250px at 50% 38%, rgba(56,102,245,.16), transparent 74%),
+        linear-gradient(180deg, rgba(11,16,32,.05) 0%, rgba(11,16,32,.46) 58%, rgba(11,16,32,.96) 100%);
+    }
+    .hero-specs { grid-template-columns: 1fr; width: 100%; }
+    .hero-spec { min-width: 0; }
+    .hero-spec + .hero-spec { border-left: 0; border-top: 1px solid rgba(255,255,255,.1); }
+    .hero-collab { align-items: flex-start; line-height: 1.45; }
+    .hero-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .hero-stat { padding: 18px 18px; }
+    .hero-stat + .hero-stat { border-left: 0; }
+    .hero-stat:nth-child(2n) { border-left: 1px solid rgba(255,255,255,.1); }
+    .hero-stat:nth-child(n+3) { border-top: 1px solid rgba(255,255,255,.1); }
+  }
+  @media (max-width: 560px) {
+    .hero-stats { grid-template-columns: 1fr; }
+    .hero-stat { min-height: 104px; }
+    .hero-stat:nth-child(2n) { border-left: 0; }
+    .hero-stat + .hero-stat { border-top: 1px solid rgba(255,255,255,.1); }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============== NAV ============== -->
+<header class="sticky top-0 z-50 backdrop-blur bg-ink/85 border-b border-white/5">
+  <div class="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+    <a href="#top" class="flex items-center gap-2 text-white font-semibold">
+      <img src="figures/stepfun-icon.png" alt="logo" class="h-6 w-6"/>
+      <span>DuplexSLA</span>
+    </a>
+    <nav class="hidden md:flex items-center gap-6 text-sm">
+      <a class="nav-link" href="#overview">Motivation</a>
+      <a class="nav-link" href="#architecture">Architecture</a>
+      <a class="nav-link" href="#capabilities">Capabilities</a>
+      <a class="nav-link" href="#data">Data &amp; Training</a>
+      <a class="nav-link" href="#evaluation">Evaluation</a>
+      <a class="nav-link" href="#takeaways">Take-aways</a>
+    </nav>
+  </div>
+</header>
+
+<!-- ============== HERO ============== -->
+<section id="top" class="grad-hero text-white">
+  <div class="duplex-hero-animation" aria-hidden="true">
+    <canvas id="hero-canvas"></canvas>
+  </div>
+  <div class="max-w-7xl mx-auto px-6 pt-16 pb-20">
+    <div class="hero-kicker"><span class="pulse-dot"></span>Native full-duplex foundation model</div>
+    <h1 class="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.05]">
+      DuplexSLA
+      <span class="block text-2xl md:text-3xl mt-3 font-medium text-white/80">
+        A Full-Duplex Spoken Language Model with Synchronized <span class="text-brand-300">Speech</span>, <span class="text-fuchsia-300">Language</span>, and <span class="text-orange-300">Action</span>
+      </span>
+    </h1>
+    <div class="hero-collab mt-5">StepFun · NTU · PKU · SJTU · UNSW · ICL</div>
+    <p class="mt-6 max-w-3xl text-white/80 text-lg leading-relaxed">
+      A single 7B backbone that <strong>listens, speaks, plans and acts</strong> on the same 160&nbsp;ms timeline. A dual-stream, three-channel formulation gives planning and tool calls their own time-stamped lane — so the assistant can think and dispatch side-effects <em>while still speaking</em>.
+    </p>
+
+    <!-- Headline metrics -->
+    <div class="hero-stats" aria-label="Headline metrics">
+      <div class="hero-stat">
+        <div class="hero-stat-label">Turn-taking delay</div>
+        <div class="hero-stat-value num">0.30 s</div>
+        <div class="hero-stat-note">Average; sub-second on all 4 scenarios</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-label">Backchannel accuracy</div>
+        <div class="hero-stat-value num">98.3%</div>
+        <div class="hero-stat-note">vs <= 40% for closed-source baselines</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-label">Tool-call latency</div>
+        <div class="hero-stat-value num">0.64 s</div>
+        <div class="hero-stat-note">About 4x faster than ASR + LLM cascade</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-label">DuplexSLA-Bench</div>
+        <div class="hero-stat-value num">2,100</div>
+        <div class="hero-stat-note">Turn-taking + tool-call cases</div>
+      </div>
+    </div>
+
+    <div class="mt-8 flex flex-wrap gap-3">
+      <a href="#architecture" class="inline-flex items-center gap-2 rounded-xl bg-brand-500 hover:bg-brand-400 text-white px-4 py-2 font-medium glow">Explore the architecture →</a>
+      <a href="#evaluation" class="inline-flex items-center gap-2 rounded-xl bg-white/10 hover:bg-white/20 text-white px-4 py-2 font-medium">Jump to results</a>
+      <a href="https://github.com/hyzhang24/DuplexSLA" target="_blank" rel="noopener" class="inline-flex items-center gap-2 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-white px-4 py-2 font-medium">GitHub</a>
+    </div>
+  </div>
+</section>
+
+<!-- ============== OVERVIEW / PROBLEM ============== -->
+<section id="overview" class="grad-section">
+  <div class="max-w-7xl mx-auto px-6 py-16">
+    <div class="grid lg:grid-cols-12 gap-10 items-center">
+      <div class="lg:col-span-5">
+        <div class="chip bg-brand-50 text-brand-700">Motivation</div>
+        <h2 class="mt-3 text-3xl md:text-4xl font-bold tracking-tight">Why a third channel?</h2>
+        <p class="mt-4 text-slate-600 leading-relaxed">
+          Most deployed speech agents glue together VAD → ASR → LLM → TTS. That stack has two structural failures in real conversations:
+        </p>
+        <ul class="mt-4 space-y-3 text-slate-700">
+          <li class="flex gap-3">
+            <span class="mt-1 h-2 w-2 rounded-full bg-rose-500 shrink-0"></span>
+            <div><strong>Energy-VAD can&apos;t read intent.</strong> Hesitations look like end-of-turn; bolting on a semantic VAD adds latency and still can&apos;t see the assistant&apos;s internal state.</div>
+          </li>
+          <li class="flex gap-3">
+            <span class="mt-1 h-2 w-2 rounded-full bg-rose-500 shrink-0"></span>
+            <div><strong>Tool calls don&apos;t fit a turn loop.</strong> Pre-speech → adds delay. Post-speech → side-effect arrives a turn late. Mid-speech on the speech channel → breaks the audio.</div>
+          </li>
+        </ul>
+        <p class="mt-5 text-slate-600 leading-relaxed">
+          DuplexSLA puts <strong>listen / speak / plan / act</strong> on one shared 160&nbsp;ms clock inside a single backbone — turn-taking decisions and tool calls become token-level dynamics, not external rules.
+        </p>
+      </div>
+
+      <div class="lg:col-span-7">
+        <div class="rounded-2xl bg-white ring-soft p-6 lg:min-h-[360px]">
+          <div class="flex items-center justify-between gap-4">
+            <div class="text-sm font-semibold text-slate-700">Conventional cascade vs DuplexSLA</div>
+            <div class="text-xs text-slate-500">at one moment in a conversation</div>
+          </div>
+          <div class="mt-5 grid md:grid-cols-2 gap-5">
+            <!-- cascade -->
+            <div class="rounded-xl border border-slate-200 p-4 bg-slate-50/60">
+              <div class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Cascade pipeline</div>
+              <div class="mt-3 space-y-2 text-sm">
+                <div class="flex items-center gap-2"><span class="kbd">VAD</span><span class="text-slate-500">energy-based, no semantics</span></div>
+                <div class="flex items-center gap-2"><span class="kbd">ASR</span><span class="text-slate-500">streaming transcript</span></div>
+                <div class="flex items-center gap-2"><span class="kbd">LLM</span><span class="text-slate-500">plan + tool call</span></div>
+                <div class="flex items-center gap-2"><span class="kbd">TTS</span><span class="text-slate-500">render audio</span></div>
+              </div>
+              <div class="mt-4 text-xs text-rose-700 bg-rose-50 border border-rose-100 rounded-lg p-3">
+                Tool calls and turn-taking decisions live <em>between</em> modules → ≥1 s latency, no shared timeline.
+              </div>
+            </div>
+            <!-- duplex -->
+            <div class="rounded-xl border-2 border-brand-200 p-4 bg-gradient-to-b from-brand-50/70 to-white">
+              <div class="text-xs font-semibold text-brand-700 uppercase tracking-wide">DuplexSLA (single backbone)</div>
+              <div class="mt-3 space-y-2 text-sm">
+                <div class="flex items-center gap-2"><span class="kbd bg-sky-100 text-sky-800">User ch.</span><span class="text-slate-600">continuous audio, 2×80 ms</span></div>
+                <div class="flex items-center gap-2"><span class="kbd bg-violet-100 text-violet-800">Assistant ch.</span><span class="text-slate-600">TA4: T + 4×40 ms audio</span></div>
+                <div class="flex items-center gap-2"><span class="kbd bg-orange-100 text-orange-800">Action ch.</span><span class="text-slate-600">≤10 text tokens / chunk</span></div>
+                <div class="flex items-center gap-2"><span class="kbd bg-emerald-100 text-emerald-800">Clock</span><span class="text-slate-600">160 ms chunks, shared</span></div>
+              </div>
+              <div class="mt-4 text-xs text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-lg p-3">
+                Planning, tool-calls and <kbd class="kbd">interrupt</kbd> / <kbd class="kbd">backchannel</kbd> / <kbd class="kbd">response</kbd> labels are emitted on a dedicated, time-stamped lane in lockstep with assistant audio.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== ARCHITECTURE ============== -->
+<section id="architecture" class="bg-white">
+  <div class="max-w-7xl mx-auto px-6 py-16">
+    <div class="flex items-end justify-between flex-wrap gap-4">
+      <div>
+        <div class="chip bg-brand-50 text-brand-700">Architecture</div>
+        <h2 class="mt-3 text-3xl md:text-4xl font-bold tracking-tight">Dual-stream, three-channel chunk format</h2>
+        <p class="mt-3 text-slate-600 max-w-3xl">Every 160 ms chunk carries causal user audio in, and the backbone autoregressively emits assistant audio (TA4) <em>plus</em> action text in a single decoding step.</p>
+      </div>
+      <div class="flex gap-2">
+        <span class="chip bg-sky-50 text-sky-800 border border-sky-100">User channel</span>
+        <span class="chip bg-violet-50 text-violet-800 border border-violet-100">Assistant channel</span>
+        <span class="chip bg-orange-50 text-orange-800 border border-orange-100">Action channel</span>
+      </div>
+    </div>
+
+    <!-- Reference figure -->
+    <div class="mt-8 rounded-2xl bg-slate-50 ring-soft overflow-hidden">
+      <img src="figures/fig_arch_chunk-1.png" alt="DuplexSLA chunk-level architecture" class="w-full h-auto"/>
+      <div class="px-6 py-3 text-xs text-slate-500 border-t border-slate-200">Figure: chunk-level architecture. The same backbone consumes user audio + previous assistant audio + previous action text, and predicts the next chunk&apos;s TA4 audio and action text.</div>
+    </div>
+
+    <!-- Per-chunk timeline animation -->
+    <div class="mt-10 rounded-2xl bg-white ring-soft p-6">
+      <div class="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <div class="text-lg font-semibold tracking-tight text-slate-800">A walkthrough of 8 chunks</div>
+          <div class="mt-1.5 flex items-center gap-2 flex-wrap">
+            <span class="mono text-[13px] font-medium text-brand-700 bg-brand-50 px-2 py-0.5 rounded num">t = 0 → 1.28 s</span>
+            <span class="text-xs text-slate-400 tracking-wide uppercase">160 ms per chunk</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 text-xs text-slate-500">
+          <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-sky-200 border border-sky-400"></span>U (causal audio feat.)</span>
+          <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-violet-200 border border-violet-400"></span>T / A (TA4)</span>
+          <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-orange-200 border border-orange-400"></span>action text</span>
+        </div>
+      </div>
+
+      <div class="mt-5 overflow-x-auto">
+        <div class="tl-grid min-w-[820px]">
+          <!-- header -->
+          <div class="col-head">Chunk&nbsp;<span class="mono italic text-slate-700">c</span></div>
+          <div class="text-center col-tick"><span class="mono">c<sub>0</sub></span> <span class="text-slate-400">·</span> 0–160</div>
+          <div class="text-center col-tick"><span class="mono">c<sub>1</sub></span> <span class="text-slate-400">·</span> 160–320</div>
+          <div class="text-center col-tick"><span class="mono">c<sub>2</sub></span> <span class="text-slate-400">·</span> 320–480</div>
+          <div class="text-center col-tick"><span class="mono">c<sub>3</sub></span> <span class="text-slate-400">·</span> 480–640</div>
+          <div class="text-center col-tick"><span class="mono">c<sub>4</sub></span> <span class="text-slate-400">·</span> 640–800</div>
+          <div class="text-center col-tick"><span class="mono">c<sub>5</sub></span> <span class="text-slate-400">·</span> 800–960</div>
+          <div class="text-center col-tick"><span class="mono">c<sub>6</sub></span> <span class="text-slate-400">·</span> 960–1120</div>
+          <div class="text-center col-tick"><span class="mono">c<sub>7</sub></span> <span class="text-slate-400">·</span> 1120–1280</div>
+
+          <!-- USER ROW -->
+          <div class="row-label">User</div>
+          <div class="chunk chunk-user"><span class="tok tok-U">U</span><span class="tok tok-U">U</span><div class="mt-1 text-[10px] opacity-70">"play…"</div></div>
+          <div class="chunk chunk-user"><span class="tok tok-U">U</span><span class="tok tok-U">U</span><div class="mt-1 text-[10px] opacity-70">"…some…"</div></div>
+          <div class="chunk chunk-user"><span class="tok tok-U">U</span><span class="tok tok-U">U</span><div class="mt-1 text-[10px] opacity-70">"…Beatles"</div></div>
+          <div class="chunk chunk-user"><span class="tok tok-U">U</span><span class="tok tok-U">U</span><div class="mt-1 text-[10px] opacity-70">silence</div></div>
+          <div class="chunk chunk-user"><span class="tok tok-U">U</span><span class="tok tok-U">U</span></div>
+          <div class="chunk chunk-user"><span class="tok tok-U">U</span><span class="tok tok-U">U</span></div>
+          <div class="chunk chunk-user"><span class="tok tok-U">U</span><span class="tok tok-U">U</span></div>
+          <div class="chunk chunk-user"><span class="tok tok-U">U</span><span class="tok tok-U">U</span></div>
+
+          <!-- ASSISTANT ROW -->
+          <div class="row-label">Assistant<br/>(TA4)</div>
+          <div class="chunk chunk-assist"><span class="tok tok-T">T</span><span class="tok tok-A">A</span><span class="tok tok-A">A</span><span class="tok tok-A">A</span><span class="tok tok-A">A</span><div class="mt-1 text-[10px] opacity-70">"Sure,"</div></div>
+          <div class="chunk chunk-assist"><span class="tok tok-T">T</span><span class="tok tok-A">A</span><span class="tok tok-A">A</span><span class="tok tok-A">A</span><span class="tok tok-A">A</span><div class="mt-1 text-[10px] opacity-70">"playing"</div></div>
+          <div class="chunk chunk-assist"><span class="tok tok-T">T</span><span class="tok tok-A">A</span><span class="tok tok-A">A</span><span class="tok tok-A">A</span><span class="tok tok-A">A</span><div class="mt-1 text-[10px] opacity-70">"music"</div></div>
+          <div class="chunk chunk-assist"><span class="tok tok-T">T</span><span class="tok tok-A">A</span><span class="tok tok-A">A</span><span class="tok tok-A">A</span><span class="tok tok-A">A</span><div class="mt-1 text-[10px] opacity-70">"now."</div></div>
+          <div class="chunk chunk-assist"><span class="tok tok-silence">&lt;tts_pad&gt;</span><span class="tok tok-silence">·</span><span class="tok tok-silence">·</span><span class="tok tok-silence">·</span><span class="tok tok-silence">·</span><div class="mt-1 text-[10px] opacity-70">silence</div></div>
+          <div class="chunk chunk-assist"><span class="tok tok-silence">&lt;vad_silence&gt;</span><div class="mt-1 text-[10px] opacity-70">listening</div></div>
+          <div class="chunk chunk-assist"><span class="tok tok-silence">&lt;vad_silence&gt;</span></div>
+          <div class="chunk chunk-assist"><span class="tok tok-silence">&lt;vad_silence&gt;</span></div>
+
+          <!-- ACTION ROW -->
+          <div class="row-label">Action<br/>(≤10 tok)</div>
+          <div class="chunk chunk-act"><span class="tok tok-ctrl">response</span></div>
+          <div class="chunk chunk-act"><span class="tok tok-plan">"User wants music"</span></div>
+          <div class="chunk chunk-act"><span class="tok tok-call">&lt;|toolcall_begin|&gt;</span><span class="tok tok-call">play_music(</span></div>
+          <div class="chunk chunk-act"><span class="tok tok-call">"The Beatles")</span><span class="tok tok-call">&lt;|toolcall_end|&gt;</span></div>
+          <div class="chunk chunk-empty">·</div>
+          <div class="chunk chunk-empty">·</div>
+          <div class="chunk chunk-empty">·</div>
+          <div class="chunk chunk-empty">·</div>
+        </div>
+      </div>
+
+      <p class="mt-5 w-full text-sm text-slate-600 leading-relaxed">
+        Each chunk: <span class="kbd">2× U</span> (80 ms causal feats) in · <span class="kbd">T + 4× A</span> assistant TA4 out · <span class="kbd">≤10 action tokens</span> out. The <code>&lt;|action_end|&gt;</code> marker terminates the action segment of every chunk — even empty ones — so the timeline stays strictly aligned to the 160 ms clock.
+      </p>
+    </div>
+
+    <!-- Serialization box -->
+    <div class="mt-10 grid lg:grid-cols-12 gap-6">
+      <div class="lg:col-span-6 rounded-2xl bg-gradient-to-br from-slate-900 via-[#0d1730] to-brand-900 text-slate-100 p-6 ring-1 ring-brand-400/20 shadow-[0_24px_64px_-32px_rgba(56,102,245,0.55)] flex flex-col">
+        <div class="text-xs uppercase tracking-wider text-slate-400">Per-chunk serialization</div>
+        <pre class="mt-3 text-[13px] leading-7 overflow-x-auto"><code><span class="text-sky-300">&lt;|user_audio_begin|&gt;</span>   U  U   <span class="text-sky-300">&lt;|user_audio_end|&gt;</span>
+<span class="text-violet-300">&lt;|assistant_audio_begin|&gt;</span> T A A A A <span class="text-violet-300">&lt;|assistant_audio_end|&gt;</span>
+<span class="text-orange-300">&lt;action text&gt;</span>            ...        <span class="text-orange-300">&lt;|action_end|&gt;</span></code></pre>
+        <div class="mt-4 text-xs text-slate-400">User audio is observed (causal front end). Assistant TA4 and action text are <em>produced</em> by the same backbone.</div>
+
+        <div class="mt-6 text-xs uppercase tracking-wider text-slate-400">A chunk with a tool call</div>
+        <pre class="mt-2 text-xs leading-6 bg-white/[0.04] border border-white/10 rounded-lg p-3 overflow-x-auto"><code>planning&lt;|toolcall_begin|&gt;{"function":"play_music",
+                          "arguments":"The Beatles"}&lt;|toolcall_end|&gt;</code></pre>
+      </div>
+
+      <div class="lg:col-span-6 rounded-2xl bg-white ring-soft p-6">
+        <div class="text-xs uppercase tracking-wider text-slate-500">Action-channel vocabulary</div>
+        <ul class="mt-3 space-y-3 text-sm">
+          <li class="flex items-start gap-3">
+            <span class="chip bg-orange-50 text-orange-800 border border-orange-100">planning</span>
+            <span class="text-slate-600">a short rationale fragment co-decoded with speech</span>
+          </li>
+          <li class="flex items-start gap-3">
+            <span class="chip bg-orange-50 text-orange-800 border border-orange-100">labels</span>
+            <span class="text-slate-600"><kbd class="kbd">response</kbd> · <kbd class="kbd">interrupt</kbd> · <kbd class="kbd">backchannel</kbd></span>
+          </li>
+          <li class="flex items-start gap-3">
+            <span class="chip bg-orange-50 text-orange-800 border border-orange-100">tool call</span>
+            <span class="text-slate-600">JSON inside <code>&lt;|toolcall_begin|&gt; … &lt;|toolcall_end|&gt;</code></span>
+          </li>
+          <li class="flex items-start gap-3">
+            <span class="chip bg-orange-50 text-orange-800 border border-orange-100">transcript</span>
+            <span class="text-slate-600">delayed user / assistant transcript for time alignment</span>
+          </li>
+        </ul>
+
+        <div class="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <div class="font-semibold">Real-time budget</div>
+          <p class="mt-1 leading-relaxed">After paying for the TA4 unit, a 7B backbone fits at most <strong>~10 action tokens</strong> inside one 160 ms chunk on mainstream accelerators. Overflow tokens spill into the next chunk via a FIFO queue — <em>never</em> breaking an open tool-call block.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- System config summary -->
+    <div class="mt-10 rounded-2xl bg-gradient-to-br from-slate-50 via-white to-brand-50/30 ring-soft overflow-hidden border border-slate-200/80">
+      <div class="px-6 py-5 flex flex-col md:flex-row md:items-end md:justify-between gap-3 border-b border-slate-200/80">
+        <div>
+          <div class="text-sm font-semibold text-slate-500">System-level summary</div>
+          <h3 class="mt-1 text-xl font-semibold tracking-tight text-slate-950">Runtime and channel configuration</h3>
+        </div>
+        <span class="text-xs text-slate-500">condensed from Table 1</span>
+      </div>
+      <div class="grid md:grid-cols-2">
+        <div class="p-5 border-b border-slate-200/80 md:border-r">
+          <div class="text-sm font-semibold text-slate-800">Backbone scale</div>
+          <div class="mt-1 text-sm text-slate-600">7B speech-LM, initialized from Step-Audio 2 mini</div>
+        </div>
+        <div class="p-5 border-b border-slate-200/80">
+          <div class="text-sm font-semibold text-slate-800">Streaming clock</div>
+          <div class="mt-1 text-sm text-slate-600">160 ms conversational chunks</div>
+        </div>
+        <div class="p-5 border-b border-slate-200/80 md:border-r">
+          <div class="text-sm font-semibold text-slate-800">User audio granularity</div>
+          <div class="mt-1 text-sm text-slate-600">2 causal acoustic features per chunk (80 ms each)</div>
+        </div>
+        <div class="p-5 border-b border-slate-200/80">
+          <div class="text-sm font-semibold text-slate-800">Assistant audio granularity</div>
+          <div class="mt-1 text-sm text-slate-600">4 discrete audio tokens per chunk (40 ms each)</div>
+        </div>
+        <div class="p-5 border-b border-slate-200/80 md:border-r">
+          <div class="text-sm font-semibold text-slate-800">Per-chunk speech layout</div>
+          <div class="mt-1 text-sm text-slate-600">TA4: one text anchor + four audio tokens</div>
+        </div>
+        <div class="p-5 border-b border-slate-200/80">
+          <div class="text-sm font-semibold text-slate-800">Action channel content</div>
+          <div class="mt-1 text-sm text-slate-600">Delayed transcript · planning text · turn-taking labels · tool calls</div>
+        </div>
+        <div class="p-5 border-b border-slate-200/80 md:border-r">
+          <div class="text-sm font-semibold text-slate-800">Per-chunk action budget</div>
+          <div class="mt-1 text-sm text-slate-600">≤ 10 tokens; overflow spills into next chunks (FIFO)</div>
+        </div>
+        <div class="p-5 border-b border-slate-200/80">
+          <div class="text-sm font-semibold text-slate-800">Tool-call schema</div>
+          <div class="mt-1 text-sm text-slate-600">50 cabin / smart-home functions + 3 interaction labels</div>
+        </div>
+        <div class="p-5 md:border-r border-slate-200/80">
+          <div class="text-sm font-semibold text-slate-800">Native duplex behaviours</div>
+          <div class="mt-1 text-sm text-slate-600">Pause · interrupt · backchannel; no external semantic VAD</div>
+        </div>
+        <div class="p-5 border-t border-slate-200/80 md:border-t-0">
+          <div class="text-sm font-semibold text-slate-800">Online tool calling</div>
+          <div class="mt-1 text-sm text-slate-600">Backchannel-triggered · single-action · multi-action</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== CAPABILITIES ============== -->
+<section id="capabilities" class="grad-section">
+  <div class="max-w-7xl mx-auto px-6 py-16">
+    <div class="chip bg-orange-50 text-orange-800">Two highlight capabilities</div>
+    <h2 class="mt-3 text-3xl md:text-4xl font-bold tracking-tight">What the action channel unlocks</h2>
+    <p class="mt-3 w-full text-slate-600">Because turn-taking labels and tool calls share a backbone with assistant speech, both are derived from the same internal semantic state that drives the response.</p>
+
+    <!-- 1. Native turn taking -->
+    <div class="mt-10 space-y-6">
+      <div class="rounded-2xl bg-white ring-soft p-6">
+        <div class="text-xs uppercase tracking-wider text-slate-500">Capability 1</div>
+        <h3 class="mt-1 text-2xl font-bold">Semantic-driven turn-taking</h3>
+        <p class="mt-3 text-slate-600 leading-relaxed">No external semantic VAD. The action channel emits the right control label at the right chunk, while the assistant TA4 switches state accordingly.</p>
+
+        <ul class="mt-5 grid md:grid-cols-3 gap-4 text-sm">
+          <li class="rounded-xl bg-slate-50 border border-slate-200 p-4">
+            <div class="flex items-center gap-2">
+              <span class="chip bg-emerald-100 text-emerald-800">pause</span>
+              <span class="font-semibold">User holds their thought</span>
+            </div>
+            <p class="mt-1 text-slate-600">Action stays at <kbd class="kbd">response</kbd>-style continue-listening; assistant TA4 emits silence anchors.</p>
+          </li>
+          <li class="rounded-xl bg-slate-50 border border-slate-200 p-4">
+            <div class="flex items-center gap-2">
+              <span class="chip bg-rose-100 text-rose-800">interrupt</span>
+              <span class="font-semibold">User starts a new thought</span>
+            </div>
+            <p class="mt-1 text-slate-600"><kbd class="kbd">interrupt</kbd> on action ch.; assistant TA4 switches to silence within a few chunks.</p>
+          </li>
+          <li class="rounded-xl bg-slate-50 border border-slate-200 p-4">
+            <div class="flex items-center gap-2">
+              <span class="chip bg-sky-100 text-sky-800">backchannel</span>
+              <span class="font-semibold">User says "mm-hmm" / "yes"</span>
+            </div>
+            <p class="mt-1 text-slate-600"><kbd class="kbd">backchannel</kbd> on action ch.; assistant <em>keeps speaking</em> — current plan not reset.</p>
+          </li>
+        </ul>
+      </div>
+
+      <div class="rounded-2xl bg-white ring-soft overflow-hidden">
+        <img src="figures/fig_interrupt_backchannel-1.png" alt="Backchannel vs Interrupt" class="w-full h-auto"/>
+        <div class="px-6 py-3 text-xs text-slate-500 border-t border-slate-200">Figure: (a) backchannel keeps the assistant talking. (b) a real interruption yields the floor within a small chunk-level latency.</div>
+      </div>
+    </div>
+
+    <!-- 2. In-conversation tool calling -->
+    <div class="mt-12 space-y-6">
+      <div class="rounded-2xl bg-white ring-soft p-6">
+        <div class="text-xs uppercase tracking-wider text-slate-500">Capability 2</div>
+        <h3 class="mt-1 text-2xl font-bold">In-conversation planning &amp; tool calling</h3>
+        <p class="mt-3 text-slate-600 leading-relaxed">Planning text and structured tool calls are emitted on the action channel <em>without halting</em> assistant audio. Each call is anchored to a chunk, so every action gets an unambiguous timestamp.</p>
+
+        <div class="mt-5 grid md:grid-cols-2 gap-4 text-sm">
+          <div class="rounded-xl bg-orange-50 border border-orange-200 p-4">
+            <div class="font-semibold text-orange-900">Backchannel-triggered tool calling</div>
+            <p class="mt-1 text-orange-900/80">A topically-unrelated short utterance ("play some Beatles songs") fires a tool call while the assistant&apos;s spoken thread continues coherently.</p>
+          </div>
+          <div class="rounded-xl bg-orange-50 border border-orange-200 p-4">
+            <div class="font-semibold text-orange-900">Multi-action tool calling</div>
+            <p class="mt-1 text-orange-900/80">One user turn → multiple tool calls (raise AC, play music, navigate) emitted <em>in semantic order along the user&apos;s request</em>, in parallel with assistant audio.</p>
+          </div>
+        </div>
+
+        <div class="mt-5 rounded-xl bg-slate-50 border border-slate-200 overflow-hidden">
+          <div class="px-4 py-2 bg-white border-b border-slate-200 flex items-center gap-2">
+            <span class="h-1.5 w-1.5 rounded-full bg-orange-500"></span>
+            <span class="text-[11px] font-mono text-slate-500"># chunk c — Maintaining tool-call integrity across chunks</span>
+          </div>
+<pre class="px-4 py-3 text-xs leading-6 font-mono text-slate-700 overflow-x-auto"><code>planning_1
+<span class="text-orange-600 font-semibold">&lt;|toolcall_begin|&gt;</span>{<span class="text-sky-700">"function"</span>:<span class="text-emerald-700">"set_ac_temperature"</span>,
+                  <span class="text-sky-700">"arguments"</span>:{<span class="text-sky-700">"value"</span>:<span class="text-violet-700">22</span>}}<span class="text-orange-600 font-semibold">&lt;|toolcall_end|&gt;</span>
+planning_2
+<span class="text-orange-600 font-semibold">&lt;|toolcall_begin|&gt;</span>{<span class="text-sky-700">"function"</span>:<span class="text-emerald-700">"play_music"</span>,
+                  <span class="text-sky-700">"arguments"</span>:<span class="text-emerald-700">"The Beatles"</span>}<span class="text-orange-600 font-semibold">&lt;|toolcall_end|&gt;</span>
+<span class="text-orange-600 font-semibold">&lt;|action_end|&gt;</span></code></pre>
+        </div>
+      </div>
+
+      <div class="rounded-2xl bg-white ring-soft overflow-hidden">
+        <img src="figures/fig_toolcall_capabilities-1.png" alt="Tool calling patterns" class="w-full h-auto"/>
+        <div class="px-6 py-3 text-xs text-slate-500 border-t border-slate-200">Figure: (a) backchannel-triggered tool call without interrupting assistant audio. (b) one user turn → three time-aligned tool calls (AC · music · navigation).</div>
+      </div>
+
+      <div class="rounded-2xl bg-gradient-to-br from-slate-50 via-white to-brand-50/40 ring-1 ring-slate-200 shadow-[0_12px_40px_-22px_rgba(56,102,245,0.22)] p-6">
+        <div class="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 ring-1 ring-brand-200/70 shadow-sm">
+          <svg class="h-3 w-3 text-brand-600" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><polygon points="3,2 10,6 3,10"/></svg>
+          <span class="text-sm font-semibold tracking-tight text-brand-700">Live demos</span>
+        </div>
+        <div class="mt-5 grid md:grid-cols-2 gap-6">
+          <div>
+            <div class="text-[15px] font-semibold text-slate-900 mb-3 tracking-tight">Backchannel-triggered tool calling</div>
+            <div class="rounded-xl overflow-hidden ring-1 ring-slate-200 bg-slate-900 shadow-lg shadow-slate-900/10">
+              <video class="w-full h-auto block" controls preload="metadata" playsinline>
+                <source src="vedio/backchannel_action_new.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+          <div>
+            <div class="text-[15px] font-semibold text-slate-900 mb-3 tracking-tight">Multi-action tool calling</div>
+            <div class="rounded-xl overflow-hidden ring-1 ring-slate-200 bg-slate-900 shadow-lg shadow-slate-900/10">
+              <video class="w-full h-auto block" controls preload="metadata" playsinline>
+                <source src="vedio/multiaction.mp4" type="video/mp4">
+              </video>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== DATA & TRAINING ============== -->
+<section id="data" class="bg-white">
+  <div class="max-w-7xl mx-auto px-6 py-16">
+    <div class="chip bg-brand-50 text-brand-700">Data &amp; Training</div>
+    <h2 class="mt-3 text-3xl md:text-4xl font-bold tracking-tight">Two stages, one unified serialization</h2>
+    <p class="mt-3 text-slate-600 max-w-3xl">CPT teaches the chunked, three-channel serialization on ~500 k hours; a smaller post-training stage (~50 k hours) sharpens the timing-critical behaviours.</p>
+
+    <!-- pipeline figure -->
+    <div class="mt-8 rounded-2xl bg-slate-50 ring-soft overflow-hidden">
+      <img src="figures/fig_data_pipeline-1.png" alt="Data construction pipeline" class="w-full h-auto"/>
+      <div class="px-6 py-3 text-xs text-slate-500 border-t border-slate-200">Figure: (a) LLM annotates each dialogue with tool-call objects (function · arguments · planning · semantic offset). (b) TTS + voice cloning + force-alignment merge tracks at the 160 ms chunk grid.</div>
+    </div>
+
+    <!-- Stage cards -->
+    <div class="mt-10 grid lg:grid-cols-2 gap-6">
+      <div class="rounded-2xl bg-gradient-to-b from-brand-50 to-white border border-brand-100 p-6">
+        <div class="flex items-center justify-between">
+          <div class="text-xs uppercase tracking-wider text-brand-700 font-semibold">Stage 1 · Continued pretraining</div>
+          <div class="text-sm text-slate-500">~500 k hours + 1.92 M text samples</div>
+        </div>
+        <h3 class="mt-2 text-2xl font-bold">Internalize the format</h3>
+        <ul class="mt-4 space-y-2 text-sm text-slate-700">
+          <li class="flex justify-between"><span>Duplex dialogue</span><span class="num font-semibold">~320 k h</span></li>
+          <li class="flex justify-between"><span>User-channel ASR</span><span class="num font-semibold">~90 k h</span></li>
+          <li class="flex justify-between"><span>Assistant-channel ASR</span><span class="num font-semibold">~90 k h</span></li>
+          <li class="flex justify-between"><span>Text (preserve world knowledge)</span><span class="num font-semibold">~1.92 M samples</span></li>
+        </ul>
+        <p class="mt-4 text-sm text-slate-600">Dual-side ASR is the trick that ties assistant audio to action time: forcing the action channel to emit the assistant transcript at the chunk each character is spoken stabilizes the model&apos;s internal clock.</p>
+      </div>
+
+      <div class="rounded-2xl bg-gradient-to-b from-orange-50 to-white border border-orange-100 p-6">
+        <div class="flex items-center justify-between">
+          <div class="text-xs uppercase tracking-wider text-orange-700 font-semibold">Stage 2 · Capability-oriented post-training</div>
+          <div class="text-sm text-slate-500">~50 k hours</div>
+        </div>
+        <h3 class="mt-2 text-2xl font-bold">Sharpen the timing</h3>
+        <ul class="mt-4 space-y-2 text-sm text-slate-700">
+          <li class="flex justify-between"><span>Interrupt + backchannel + pause</span><span class="num font-semibold">~36 k h</span></li>
+          <li class="flex justify-between"><span>Tool-call (BC / single / multi)</span><span class="num font-semibold">~14 k h</span></li>
+        </ul>
+        <p class="mt-4 text-sm text-slate-600">A small but highly-informative slice. Same decoder interface as CPT — only the supervision target shifts toward timing-sensitive, action-emitting behaviours.</p>
+      </div>
+    </div>
+
+    <!-- mixture pie -->
+    <div class="mt-10">
+      <div class="rounded-2xl bg-white ring-soft p-6">
+        <div class="text-lg font-semibold tracking-tight text-slate-800">Audio-data distribution</div>
+        <div class="mt-1 text-sm text-slate-500">CPT (left) vs Post-training (right)</div>
+        <div class="mt-5 grid md:grid-cols-2 gap-6">
+          <div>
+            <div class="relative" style="height: 300px;">
+              <canvas id="pieCPT"></canvas>
+            </div>
+            <div class="mt-3 text-center text-sm font-medium text-slate-600">CPT — ~500 k h audio</div>
+          </div>
+          <div>
+            <div class="relative" style="height: 300px;">
+              <canvas id="piePT"></canvas>
+            </div>
+            <div class="mt-3 text-center text-sm font-medium text-slate-600">Post-training — ~50 k h</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============== EVALUATION ============== -->
+<section id="evaluation" class="grad-section">
+  <div class="max-w-7xl mx-auto px-6 py-16">
+    <div class="chip bg-fuchsia-50 text-fuchsia-700">Evaluation</div>
+    <h2 class="mt-3 text-3xl md:text-4xl font-bold tracking-tight">DuplexSLA-Bench · 2,100 cases</h2>
+    <p class="mt-3 text-slate-600 max-w-3xl">1,200 turn-taking cases (300 each: <code>normal</code>, <code>pause</code>, <code>interrupt</code>, <code>backchannel</code>) + a 900-case tool-call subset (300 each: single-action, multi-action, backchannel-action).</p>
+
+    <!-- Tool call bar chart -->
+    <div class="mt-10 grid lg:grid-cols-2 gap-6">
+      <div class="rounded-2xl bg-white ring-soft p-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="text-sm font-semibold text-slate-700">Tool-call delay (lower is better)</div>
+            <div class="text-xs text-slate-500">~4× lower than ASR + LLM cascade on average</div>
+          </div>
+          <span class="chip bg-emerald-50 text-emerald-700 border border-emerald-100">4× faster</span>
+        </div>
+        <canvas id="toolDelay" height="240" class="mt-4"></canvas>
+      </div>
+
+      <div class="rounded-2xl bg-white ring-soft p-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="text-sm font-semibold text-slate-700">Tool-call accuracy</div>
+            <div class="text-xs text-slate-500">Competitive with the cascade across all 3 patterns</div>
+          </div>
+        </div>
+        <canvas id="toolAcc" height="240" class="mt-4"></canvas>
+      </div>
+    </div>
+
+    <!-- Turn-taking results -->
+    <div class="mt-10 rounded-2xl bg-white ring-soft overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div>
+          <div class="text-sm font-semibold text-slate-700">Full-duplex turn-taking — context-prefill setting</div>
+          <div class="text-xs text-slate-500">Highest accuracy and lowest delay in every scenario.</div>
+        </div>
+        <span class="chip bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-100">all four scenarios</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="table-clean min-w-full">
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th colspan="2" class="border-l border-slate-100">normal</th>
+              <th colspan="2" class="border-l border-slate-100">pause</th>
+              <th colspan="2" class="border-l border-slate-100">interrupt</th>
+              <th colspan="2" class="border-l border-slate-100">backchannel</th>
+            </tr>
+            <tr class="text-xs text-slate-500">
+              <th></th>
+              <th class="border-l border-slate-100">Acc (%)</th><th>Delay (s)</th>
+              <th class="border-l border-slate-100">Acc (%)</th><th>Delay (s)</th>
+              <th class="border-l border-slate-100">Acc (%)</th><th>Delay (s)</th>
+              <th class="border-l border-slate-100">Acc (%)</th><th>Delay (s)</th>
+            </tr>
+          </thead>
+          <tbody class="num">
+            <tr class="bg-brand-50/40">
+              <td class="font-semibold">DuplexSLA</td>
+              <td class="border-l border-slate-100 best">96.00</td><td class="best">0.27</td>
+              <td class="border-l border-slate-100 best">93.33</td><td class="best">0.27</td>
+              <td class="border-l border-slate-100 best">99.33</td><td class="best">0.40</td>
+              <td class="border-l border-slate-100 best">98.33</td><td class="best">0.32</td>
+            </tr>
+            <tr>
+              <td>gemini-3.1-flash-live</td>
+              <td class="border-l border-slate-100">93.67</td><td>1.18</td>
+              <td class="border-l border-slate-100">94.33</td><td>1.17</td>
+              <td class="border-l border-slate-100">63.67</td><td>0.62</td>
+              <td class="border-l border-slate-100">40.00</td><td class="text-slate-400">N/A</td>
+            </tr>
+            <tr>
+              <td>gpt-realtime-1.5 <span class="text-xs text-slate-500">(semantic-vad-high)</span></td>
+              <td class="border-l border-slate-100">91.33</td><td>1.67</td>
+              <td class="border-l border-slate-100">90.33</td><td>1.68</td>
+              <td class="border-l border-slate-100">79.00</td><td>0.68</td>
+              <td class="border-l border-slate-100">0.33</td><td class="text-slate-400">N/A</td>
+            </tr>
+            <tr>
+              <td>gpt-realtime-1.5 <span class="text-xs text-slate-500">(server-vad-40ms)</span></td>
+              <td class="border-l border-slate-100">82.33</td><td>0.95</td>
+              <td class="border-l border-slate-100">71.00</td><td>1.02</td>
+              <td class="border-l border-slate-100">77.00</td><td>0.72</td>
+              <td class="border-l border-slate-100">13.00</td><td class="text-slate-400">N/A</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="px-6 py-3 text-xs text-slate-500 border-t border-slate-100">Closed-source baselines expose no backchannel label → backchannel delay is N/A.</div>
+    </div>
+
+    <!-- No-prefill -->
+    <div class="mt-8 rounded-2xl bg-white ring-soft overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div>
+          <div class="text-sm font-semibold text-slate-700">No-context-prefill setting</div>
+          <div class="text-xs text-slate-500">Only sub-second system with competitive accuracy.</div>
+        </div>
+        <span class="chip bg-emerald-50 text-emerald-700 border border-emerald-100">sub-second</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="table-clean min-w-full">
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th colspan="2" class="border-l border-slate-100">Avg (2 scen.)</th>
+              <th colspan="2" class="border-l border-slate-100">normal</th>
+              <th colspan="2" class="border-l border-slate-100">pause</th>
+            </tr>
+            <tr class="text-xs text-slate-500">
+              <th></th>
+              <th class="border-l border-slate-100">Acc (%)</th><th>Delay (s)</th>
+              <th class="border-l border-slate-100">Acc (%)</th><th>Delay (s)</th>
+              <th class="border-l border-slate-100">Acc (%)</th><th>Delay (s)</th>
+            </tr>
+          </thead>
+          <tbody class="num">
+            <tr class="bg-brand-50/40"><td class="font-semibold">DuplexSLA</td><td class="border-l border-slate-100 best">94.34</td><td class="best">0.30</td><td class="border-l border-slate-100 best">95.67</td><td class="best">0.29</td><td class="border-l border-slate-100 best">93.00</td><td class="best">0.31</td></tr>
+            <tr><td>Freeze-Omni</td><td class="border-l border-slate-100">10.67</td><td>0.36</td><td class="border-l border-slate-100">10.33</td><td>0.40</td><td class="border-l border-slate-100">11.00</td><td>0.33</td></tr>
+            <tr><td>PersonaPlex</td><td class="border-l border-slate-100">22.34</td><td>0.47</td><td class="border-l border-slate-100">22.67</td><td>0.38</td><td class="border-l border-slate-100">22.00</td><td>0.55</td></tr>
+            <tr><td>MiniCPM-o</td><td class="border-l border-slate-100">82.00</td><td>0.61</td><td class="border-l border-slate-100">83.33</td><td>0.62</td><td class="border-l border-slate-100">80.67</td><td>0.59</td></tr>
+            <tr><td>gemini-3.1-flash-live</td><td class="border-l border-slate-100">93.17</td><td>1.17</td><td class="border-l border-slate-100">93.67</td><td>1.16</td><td class="border-l border-slate-100">93.67</td><td>1.18</td></tr>
+            <tr><td>gpt-realtime-1.5 <span class="text-xs text-slate-500">(semantic-vad-high)</span></td><td class="border-l border-slate-100">96.50</td><td>1.57</td><td class="border-l border-slate-100">96.70</td><td>1.57</td><td class="border-l border-slate-100">96.30</td><td>1.57</td></tr>
+            <tr><td>gpt-realtime-1.5 <span class="text-xs text-slate-500">(server-vad-40ms)</span></td><td class="border-l border-slate-100">85.50</td><td>0.83</td><td class="border-l border-slate-100">91.30</td><td>0.83</td><td class="border-l border-slate-100">79.70</td><td>0.83</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Tool-call table -->
+    <div class="mt-8 rounded-2xl bg-white ring-soft overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div>
+          <div class="text-sm font-semibold text-slate-700">Tool-call accuracy &amp; delay</div>
+          <div class="text-xs text-slate-500">900 cases · 3 patterns</div>
+        </div>
+        <span class="chip bg-orange-50 text-orange-700 border border-orange-100">action channel</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="table-clean min-w-full">
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th colspan="2" class="border-l border-slate-100">Avg (3 patterns)</th>
+              <th colspan="2" class="border-l border-slate-100">Single action</th>
+              <th colspan="2" class="border-l border-slate-100">Multi actions</th>
+              <th colspan="2" class="border-l border-slate-100">Backchannel action</th>
+            </tr>
+            <tr class="text-xs text-slate-500">
+              <th></th>
+              <th class="border-l border-slate-100">Acc (%)</th><th>Delay (s)</th>
+              <th class="border-l border-slate-100">Acc (%)</th><th>Delay (s)</th>
+              <th class="border-l border-slate-100">Acc (%)</th><th>Delay (s)</th>
+              <th class="border-l border-slate-100">Acc (%)</th><th>Delay (s)</th>
+            </tr>
+          </thead>
+          <tbody class="num">
+            <tr><td>ASR + LLM cascade</td><td class="border-l border-slate-100">91.33</td><td>2.77</td><td class="border-l border-slate-100">89.33</td><td>2.33</td><td class="border-l border-slate-100">89.33</td><td>4.71</td><td class="border-l border-slate-100">95.33</td><td>1.27</td></tr>
+            <tr class="bg-brand-50/40"><td class="font-semibold">DuplexSLA</td><td class="border-l border-slate-100">85.56</td><td class="best">0.64</td><td class="border-l border-slate-100">85.67</td><td class="best">0.67</td><td class="border-l border-slate-100">75.00</td><td class="best">0.68</td><td class="border-l border-slate-100 best">96.00</td><td class="best">0.57</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== TAKE-AWAYS ============== -->
+<section id="takeaways" class="bg-white">
+  <div class="max-w-7xl mx-auto px-6 py-16">
+    <div class="chip bg-emerald-50 text-emerald-700">Take-aways</div>
+    <h2 class="mt-3 text-3xl md:text-4xl font-bold tracking-tight">One backbone · one clock · two breakthroughs</h2>
+
+    <div class="mt-8 grid md:grid-cols-3 gap-5">
+      <div class="rounded-2xl bg-gradient-to-b from-brand-50 to-white border border-brand-100 p-6">
+        <div class="flex items-start gap-2.5">
+          <span class="inline-flex shrink-0 items-center justify-center h-6 w-6 mt-0.5 rounded-full bg-brand-500 text-white text-xs font-bold leading-none">1</span>
+          <div>
+            <h3 class="font-bold text-lg">Sub-second turn taking on all 4 scenarios</h3>
+            <p class="mt-2 text-sm text-slate-600">Normal handover, pause, interrupt, and backchannel all become token-level dynamics — not external VAD rules.</p>
+          </div>
+        </div>
+      </div>
+      <div class="rounded-2xl bg-gradient-to-b from-orange-50 to-white border border-orange-100 p-6">
+        <div class="flex items-start gap-2.5">
+          <span class="inline-flex shrink-0 items-center justify-center h-6 w-6 mt-0.5 rounded-full bg-orange-500 text-white text-xs font-bold leading-none">2</span>
+          <div>
+            <h3 class="font-bold text-lg">~4× lower tool-call latency</h3>
+            <p class="mt-2 text-sm text-slate-600">The action channel emits planning + JSON tool calls without waiting for a turn boundary or breaking assistant speech.</p>
+          </div>
+        </div>
+      </div>
+      <div class="rounded-2xl bg-gradient-to-b from-emerald-50 to-white border border-emerald-100 p-6">
+        <div class="flex items-start gap-2.5">
+          <span class="inline-flex shrink-0 items-center justify-center h-6 w-6 mt-0.5 rounded-full bg-emerald-500 text-white text-xs font-bold leading-none">3</span>
+          <div>
+            <h3 class="font-bold text-lg">Only system that handles backchannel</h3>
+            <p class="mt-2 text-sm text-slate-600">98.33% backchannel accuracy vs ≤ 40% for closed-source baselines that expose no such label.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-10 rounded-2xl bg-gradient-to-br from-slate-900 via-brand-900 to-[#3a2364] text-slate-100 p-8 ring-1 ring-brand-400/25 shadow-[0_30px_80px_-32px_rgba(56,102,245,0.55)] relative overflow-hidden">
+      <div class="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-assist/25 blur-3xl"></div>
+      <div class="pointer-events-none absolute -bottom-28 -left-16 h-72 w-72 rounded-full bg-action/15 blur-3xl"></div>
+      <div class="relative">
+        <h3 class="text-xl font-bold flex items-start gap-2.5">
+          <span class="inline-flex shrink-0 items-center justify-center h-7 w-7 rounded-full bg-gradient-to-br from-brand-400 to-brand-600 text-white text-sm leading-none shadow-[0_6px_18px_-6px_rgba(56,102,245,0.8)]">✦</span>
+          <span>The third channel is the design choice that matters.</span>
+        </h3>
+        <p class="mt-3 text-slate-300 leading-relaxed">A dedicated, chunk-synchronised text lane for planning + tool calls gives every action an unambiguous timestamp, keeps the assistant audio smooth, and is cheap enough (≤10 tokens/chunk) to fit inside a 160 ms real-time budget on mainstream accelerators. The same backbone learns <em>what to do</em> and <em>when to do it</em> from the same supervision target.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== FOOTER ============== -->
+<footer class="bg-ink text-slate-400">
+  <div class="max-w-7xl mx-auto px-6 py-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <img src="figures/stepfun-icon.png" class="h-7 w-7"/>
+      <div>
+        <div class="text-white font-semibold">DuplexSLA</div>
+        <div class="text-xs">A Full-Duplex Speech–Language–Action Foundation Model</div>
+      </div>
+    </div>
+    <div class="text-xs">
+      StepFun · Peking University · Nanyang Technological University · Shanghai Jiao Tong University · UNSW · Imperial College London
+    </div>
+  </div>
+</footer>
+
+<script src="hero-animation.js"></script>
+<script>
+  // ===== Pie: CPT =====
+  const cptCtx = document.getElementById('pieCPT');
+  if (cptCtx) {
+    new Chart(cptCtx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Duplex dialogue (~320 k h)', 'User-channel ASR (~90 k h)', 'Assistant-channel ASR (~90 k h)'],
+        datasets: [{
+          data: [320, 90, 90],
+          backgroundColor: ['#3866f5', '#0ea5e9', '#7c3aed'],
+          borderWidth: 0,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              boxWidth: 12,
+              boxHeight: 12,
+              padding: 12,
+              color: '#334155',
+              font: { size: 13, family: "'Inter', sans-serif", weight: '500' }
+            }
+          },
+          tooltip: {
+            titleFont: { size: 13, family: "'Inter', sans-serif", weight: '600' },
+            bodyFont: { size: 12, family: "'Inter', sans-serif" },
+            callbacks: { label: (ctx)=> ctx.label + ': ' + ctx.parsed + ' k h' }
+          }
+        },
+        cutout: '60%',
+      }
+    });
+  }
+  // ===== Pie: post-train =====
+  const ptCtx = document.getElementById('piePT');
+  if (ptCtx) {
+    new Chart(ptCtx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Interrupt + backchannel + pause (~36 k h)', 'Tool-call data (~14 k h)'],
+        datasets: [{
+          data: [36, 14],
+          backgroundColor: ['#f97316', '#fbbf24'],
+          borderWidth: 0,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              boxWidth: 12,
+              boxHeight: 12,
+              padding: 12,
+              color: '#334155',
+              font: { size: 13, family: "'Inter', sans-serif", weight: '500' }
+            }
+          },
+          tooltip: {
+            titleFont: { size: 13, family: "'Inter', sans-serif", weight: '600' },
+            bodyFont: { size: 12, family: "'Inter', sans-serif" },
+            callbacks: { label: (ctx)=> ctx.label + ': ' + ctx.parsed + ' k h' }
+          }
+        },
+        cutout: '60%',
+      }
+    });
+  }
+
+  // ===== Tool delay bar =====
+  const tdCtx = document.getElementById('toolDelay');
+  if (tdCtx) {
+    new Chart(tdCtx, {
+      type: 'bar',
+      data: {
+        labels: ['Avg (3 patterns)', 'Single action', 'Multi actions', 'Backchannel action'],
+        datasets: [
+          { label: 'ASR + LLM cascade', data: [2.77, 2.33, 4.71, 1.27], backgroundColor: '#94a3b8' },
+          { label: 'DuplexSLA',         data: [0.64, 0.67, 0.68, 0.57], backgroundColor: '#3866f5' },
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } },
+          tooltip: { callbacks: { label: (ctx)=> ctx.dataset.label + ': ' + ctx.parsed.y + ' s' } }
+        },
+        scales: {
+          y: { beginAtZero: true, title: { display: true, text: 'Delay (s)' }, grid: { color: '#eef2f7' } },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+  }
+  // ===== Tool acc bar =====
+  const taCtx = document.getElementById('toolAcc');
+  if (taCtx) {
+    new Chart(taCtx, {
+      type: 'bar',
+      data: {
+        labels: ['Avg (3 patterns)', 'Single action', 'Multi actions', 'Backchannel action'],
+        datasets: [
+          { label: 'ASR + LLM cascade', data: [91.33, 89.33, 89.33, 95.33], backgroundColor: '#94a3b8' },
+          { label: 'DuplexSLA',         data: [85.56, 85.67, 75.00, 96.00], backgroundColor: '#3866f5' },
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } },
+          tooltip: { callbacks: { label: (ctx)=> ctx.dataset.label + ': ' + ctx.parsed.y + ' %' } }
+        },
+        scales: {
+          y: { beginAtZero: true, suggestedMax: 100, title: { display: true, text: 'Accuracy (%)' }, grid: { color: '#eef2f7' } },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+  }
+
+  // ===== Scroll-spy =====
+  const sections = ['overview','architecture','capabilities','data','evaluation','takeaways'];
+  const links = {};
+  sections.forEach(s => { links[s] = document.querySelector(`a.nav-link[href="#${s}"]`); });
+  const io = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{
+      if (e.isIntersecting) {
+        Object.values(links).forEach(l => l && l.classList.remove('active'));
+        const id = e.target.getAttribute('id');
+        if (links[id]) links[id].classList.add('active');
+      }
+    });
+  }, { rootMargin: '-40% 0px -55% 0px', threshold: 0 });
+  sections.forEach(s => { const el = document.getElementById(s); if (el) io.observe(el); });
+</script>
+</body>
+</html>
