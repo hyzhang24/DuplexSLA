@@ -6,6 +6,7 @@
 
 <a href="#"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-coming%20soon-b31b1b.svg"></a>
 <a href="#"><img alt="Hugging Face" src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-coming%20soon-lightgrey.svg"></a>
+<a href="https://hyzhang24.github.io/DuplexSLA/"><img alt="Demo Page" src="https://img.shields.io/badge/Demo-Page-blue.svg"></a>
 <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-MIT-yellow.svg"></a>
 
 </div>
@@ -18,8 +19,6 @@
 ## 📑 Open-source Plan
 
 - [x] DuplexSLA [technical report (PDF)](DuplexSLA.pdf) — arXiv version coming soon
-- [ ] Model checkpoints (Hugging Face)
-- [ ] Inference code
 - [ ] **DuplexSLA-Bench** evaluation code and data
 
 ## Introduction
